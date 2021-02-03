@@ -2,8 +2,8 @@ import threading
 
 import yaml
 
-from sigplane.Plane import Plane
-from sigplane.Subscription import Subscription
+from .Plane import Plane
+from .Subscription import Subscription
 
 
 class PlaneList:

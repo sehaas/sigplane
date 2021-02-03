@@ -3,16 +3,14 @@ import gzip
 import json
 import logging
 import re
-import signal
-import sys
 import threading
 import time
 import urllib.request
 
 from signald import Signal
 
-from sigplane.Config import Config
-from sigplane.PlaneList import PlaneList
+from .Config import Config
+from .PlaneList import PlaneList
 
 
 class SigplaneDaemon:
@@ -136,18 +134,3 @@ class SigplaneDaemon:
             )
 
         self._signal_client.run_chat()
-
-
-if __name__ == "__main__":
-    format = "%(asctime)s: %(message)s"
-    logging.basicConfig(format=format, level=logging.INFO, datefmt="%H:%M:%S")
-    daemon = SigplaneDaemon(config="config.yml")
-    daemon.start()
-
-    def ctrl_c_handler(sig, frame):
-        print("Ctrl+C pressed! Shutting down...")
-        daemon.save()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, ctrl_c_handler)
-    signal.pause()

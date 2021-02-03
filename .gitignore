@@ -3,3 +3,4 @@ config.yml
 planelist.yml
 __pycache__
 .DS_Store
+*.pyc
