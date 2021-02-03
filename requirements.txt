@@ -1,0 +1,1 @@
+pysignald @ git+https://gitlab.com/stavros/pysignald.git@5b4d2279e1cd730511899d3f3e92ab0dadba2320

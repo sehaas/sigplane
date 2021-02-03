@@ -1,0 +1,18 @@
+{
+    "python.pythonPath": "${workspaceFolder}/.venv/bin/python3.9",
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true,
+    "python.sortImports.args": [
+        "-sp isort.cfg"
+    ],
+    "python.formatting.provider": "black",
+    "python.formatting.blackArgs": [
+        "--line-width=99"
+    ],
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    },
+    "editor.formatOnSave": true
+}

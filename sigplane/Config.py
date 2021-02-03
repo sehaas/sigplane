@@ -13,6 +13,7 @@ class Config:
         plane_idle=10,
         poll_interval=1,
         planelist="planelist.yml",
+        socket="/signald/signald.sock",
         **kwargs
     ):
         self._username = username
@@ -21,6 +22,10 @@ class Config:
         self._plane_idle = datetime.timedelta(minutes=plane_idle)
         self._poll_interval = datetime.timedelta(minutes=poll_interval).seconds
         self._planelist = planelist
+        if isinstance(socket, list):
+            self._socket = tuple(socket)
+        else:
+            self._socket = socket
 
     @property
     def username(self):
@@ -45,6 +50,10 @@ class Config:
     @property
     def planelist(self):
         return self._planelist
+
+    @property
+    def socket(self):
+        return self._socket
 
     @classmethod
     def load(cls, filename="config.yml"):

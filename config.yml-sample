@@ -1,0 +1,7 @@
+username: '+431112223333' # Signal account
+socket: '/signald/signald.sock' # signald daemon socket
+api_key: 'XXX-YYY-ZZZ' # adsbexchange.com API key
+api_url: 'https://adsbexchange.com/api/aircraft/json/lat/47.75/lon/14.75/dist/120' # API endpoint
+plane_idle: 10 # minutes
+poll_interval: 1 # minute
+planelist: 'planelist.yml' # data storrage

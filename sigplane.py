@@ -23,21 +23,24 @@ class SigplaneDaemon:
         self._subscriptions = PlaneList.load(self._config.planelist)
 
         self._signal_client = Signal(
-            self._config.username, socket_path=("10.41.0.102", 15432)
+            self._config.username, socket_path=self._config.socket
         )
 
-        threading.Thread(target=self.message_thread, daemon=True).start()
-        threading.Thread(target=self.airplanes_thread, daemon=True).start()
+        self._signald_thread = threading.Thread(
+            target=self._message_thread, daemon=True
+        )
+        self._planes_thread = threading.Thread(
+            target=self._airplanes_thread, daemon=True
+        )
 
-        def ctrl_c_handler(sig, frame):
-            self._subscriptions.save(self._config.planelist)
-            print("You pressed Ctrl+C!")
-            sys.exit(0)
+    def start(self):
+        self._signald_thread.start()
+        self._planes_thread.start()
 
-        signal.signal(signal.SIGINT, ctrl_c_handler)
-        signal.pause()
+    def save(self):
+        self._subscriptions.save(self._config.planelist)
 
-    def airplanes_thread(self):
+    def _airplanes_thread(self):
         url = self._config.api_url
         logging.info("Fetch airplanes from %s", url)
         while True:
@@ -97,37 +100,26 @@ class SigplaneDaemon:
             self._subscriptions.save(self._config.planelist)
             time.sleep(self._config.poll_interval)
 
-    def message_thread(self):
-        ICAO_PATTERN = "([0-9A-F]{6}|[0-9A-F]{1,5}(?=\\*))"
-
+    def _message_thread(self):
         @self._signal_client.chat_handler(
-            re.compile("unsubscribe %s" % ICAO_PATTERN, re.I), order=10
+            re.compile(
+                "((?:un)?(?:block|subscribe))\\s+([0-9A-F]{6}|[0-9A-F]{1,5}(?=\\*))",
+                re.I,
+            ),
+            order=10,
         )
-        def unsubscribe(message, match):
-            # This will only be sent if nothing else matches, because matching
-            # stops by default on the first function that matches.
-            icao = match.group(1).upper()
+        def _message_common_handler(message, match):
+            command = match.group(1).lower()
+            icao = match.group(2).upper()
             wildcard = "*" if len(icao) < 6 else ""
             number = message.source.get("number")
-            self._subscriptions.unsubscribe(icao, number)
-            logging.info("Unsubscribed %s from %s%s", number, icao, wildcard)
-            return "unsubscribed from %s%s" % (icao, wildcard)
-
-        @self._signal_client.chat_handler(
-            re.compile("subscribe %s" % ICAO_PATTERN, re.I), order=11
-        )
-        def subscribe(message, match):
-            # This will only be sent if nothing else matches, because matching
-            # stops by default on the first function that matches.
-            icao = match.group(1).upper()
-            wildcard = "*" if len(icao) < 6 else ""
-            number = message.source.get("number")
-            self._subscriptions.subscribe(icao, number)
-            logging.info("Subscribed %s to %s%s", number, icao, wildcard)
-            return "subscribed to %s%s" % (icao, wildcard)
+            getattr(self._subscriptions, command)(icao, number)
+            msg = "%sd ICAO %s%s for %s" % (command, icao, wildcard, number)
+            logging.info(msg)
+            return msg
 
         @self._signal_client.chat_handler("")
-        def catch_all(message, match):
+        def _message_catch_all(message, match):
             # This will only be sent if nothing else matches, because matching
             # stops by default on the first function that matches.
             logging.info(
@@ -135,13 +127,27 @@ class SigplaneDaemon:
                 message.source.get("number"),
                 message.text,
             )
-            return "usage: \n\t<subscribe|unsubscribe> <icao>"
+            return (
+                "possible commands:\n"
+                "\tsubscribe <icao>\n"
+                "\tunsubscribe <icao>\n"
+                "\tblock <icao>\n"
+                "\tunblock <icao>"
+            )
 
-        logging.info("Message Thread")
         self._signal_client.run_chat()
 
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO, datefmt="%H:%M:%S")
-    SigplaneDaemon(config="config.yml")
+    daemon = SigplaneDaemon(config="config.yml")
+    daemon.start()
+
+    def ctrl_c_handler(sig, frame):
+        print("Ctrl+C pressed! Shutting down...")
+        daemon.save()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, ctrl_c_handler)
+    signal.pause()

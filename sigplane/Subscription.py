@@ -24,3 +24,4 @@ class Subscription:
             self._subscribers.remove(number)
         except ValueError:
             pass  # do nothing!
+        return len(self._subscribers)

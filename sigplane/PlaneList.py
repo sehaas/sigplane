@@ -1,4 +1,3 @@
-import logging
 import threading
 
 import yaml
@@ -7,19 +6,12 @@ from sigplane.Plane import Plane
 from sigplane.Subscription import Subscription
 
 
-def constructor(loader, node):
-    fields = loader.construct_mapping(node)
-    return PlaneList(**fields)
-
-
-yaml.add_constructor("!!python/object:sigplane.PlaneList.PlaneList", constructor)
-
-
 class PlaneList:
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._planes = {}
         self._subscriptions = {}
+        self._blocklist = {}
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -28,7 +20,7 @@ class PlaneList:
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     @classmethod
     def load(cls, filename):
@@ -43,13 +35,6 @@ class PlaneList:
             with open(filename, "w") as f:
                 yaml.dump(self, f)
 
-    # def init_locking(self):
-    #     self._lock = threading.Lock()
-
-    # @property
-    # def planes(self):
-    #     return tuple(self._planes.values())
-
     @property
     def pattern(self):
         return tuple(self._subscriptions.keys())
@@ -60,17 +45,27 @@ class PlaneList:
 
     def subscribe(self, icao, number):
         with self._lock:
-            try:
-                self._subscriptions.setdefault(icao, Subscription(icao)).add_subscriber(
-                    number
-                )
-            except Exception as e:
-                logging.error(e)
+            self._subscriptions.setdefault(icao, Subscription(icao)).add_subscriber(
+                number
+            )
+            self.unblock(icao, number)  # overrule previous block
 
     def unsubscribe(self, icao, number):
         with self._lock:
-            if icao in self._planes:
-                self._subscriptions.get(icao).del_subscriber(number)
+            if icao in self._subscriptions:
+                if self._subscriptions.get(icao).del_subscriber(number) == 0:
+                    self._subscriptions.pop(icao)
+
+    def block(self, icao, number):
+        with self._lock:
+            self._blocklist.setdefault(icao, Subscription(icao)).add_subscriber(number)
+            self.unsubscribe(icao, number)  # overrule previous subscription
+
+    def unblock(self, icao, number):
+        with self._lock:
+            if icao in self._blocklist:
+                if self._blocklist.get(icao).del_subscriber(number) == 0:
+                    self._blocklist.pop(icao)
 
     def check_icao(self, icao):
         with self._lock:
@@ -78,6 +73,11 @@ class PlaneList:
             for sub in self._subscriptions.values():
                 if icao.startswith(sub.pattern):
                     numbers.update(sub.subscribers)
+
+            for block in self._blocklist.values():
+                if icao.startswith(block.pattern):
+                    numbers.difference_update(block.subscribers)
+
             if len(numbers) == 0:
                 if icao in self._planes:
                     self._planes.pop(icao)
