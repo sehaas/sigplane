@@ -8,7 +8,7 @@
             "name": "Python: thread",
             "type": "python",
             "request": "launch",
-            "program": "sigplane.py",
+            "module": "sigplane",
             "console": "integratedTerminal"
         }
     ]

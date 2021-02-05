@@ -42,61 +42,65 @@ class SigplaneDaemon:
         url = self._config.api_url
         logging.info("Fetch airplanes from %s", url)
         while True:
-            request = urllib.request.Request(url)
-            request.add_header("api-auth", self._config.api_key)
-            request.add_header("Accept-Encoding", "gzip")
-            response = urllib.request.urlopen(request)
-            data = response.read()
-            if response.info().get("Content-Encoding") == "gzip":
-                data = gzip.decompress(data)
-            data = json.loads(data)
+            try:
+                request = urllib.request.Request(url)
+                request.add_header("api-auth", self._config.api_key)
+                request.add_header("Accept-Encoding", "gzip")
+                response = urllib.request.urlopen(request)
+                data = response.read()
+                if response.info().get("Content-Encoding") == "gzip":
+                    data = gzip.decompress(data)
+                data = json.loads(data)
 
-            logging.info("%d available planes", data.get("total"))
-            for ac in data.get("ac"):
-                icao = ac.get("icao")
-                subscribers, plane = self._subscriptions.check_icao(icao)
-                if plane is not None:
-                    last_seen = datetime.datetime.fromtimestamp(
-                        float(ac.get("postime")) / 1000.0
-                    )
-                    plane.last_position = (float(ac.get("lat")), float(ac.get("lon")))
-                    plane.reg = ac.get("reg")
-                    plane.call = ac.get("call")
-                    if (
-                        plane.last_seen is None
-                        or (last_seen - plane.last_seen) > self._config.plane_idle
-                    ):
-                        for n in subscribers:
-                            self._signal_client.send_message(
-                                n,
-                                "Found plane %s (%s) at %s, %s\n%s?icao=%s"
-                                % (
-                                    plane.call,
-                                    plane.reg,
-                                    ac.get("lat"),
-                                    ac.get("lon"),
-                                    self.DOMAIN,
-                                    icao,
-                                ),
-                                False,
-                            )
-                        logging.info(
-                            "Plane found: %s (%s / %s). Notified %d subscibers",
-                            plane.call,
-                            plane.reg,
-                            icao,
-                            len(subscribers),
-                        )
-                    else:
-                        logging.info(
-                            "Plane still available: %s (%s / %s). Skipping notifications.",
-                            plane.call,
-                            plane.reg,
-                            icao,
-                        )
-                    plane.last_seen = last_seen
-            self._subscriptions.save(self._config.planelist)
+                logging.info("%d available planes", data.get("total"))
+                for ac in data.get("ac"):
+                    subscribers, plane = self._subscriptions.check_icao(ac.get("icao"))
+                    if plane is not None:
+                        self._handle_plane(ac, subscribers, plane)
+                self._subscriptions.save(self._config.planelist)
+            except Exception as e:
+                logging.error("Exception occurrend %s" % e.msg)
             time.sleep(self._config.poll_interval)
+
+    def _handle_plane(self, ac, subscribers, plane):
+        icao = plane.icao
+        last_seen = datetime.datetime.fromtimestamp(float(ac.get("postime")) / 1000.0)
+        plane.last_position = (float(ac.get("lat")), float(ac.get("lon")))
+        plane.reg = ac.get("reg")
+        plane.call = ac.get("call")
+        if (
+            plane.last_seen is None
+            or (last_seen - plane.last_seen) > self._config.plane_idle
+        ):
+            for n in subscribers:
+                self._signal_client.send_message(
+                    n,
+                    "Found plane %s (%s) at %s, %s\n%s?icao=%s"
+                    % (
+                        plane.call,
+                        plane.reg,
+                        ac.get("lat"),
+                        ac.get("lon"),
+                        self.DOMAIN,
+                        icao,
+                    ),
+                    False,
+                )
+            logging.info(
+                "Plane found: %s (%s / %s). Notified %d subscibers",
+                plane.call,
+                plane.reg,
+                icao,
+                len(subscribers),
+            )
+        else:
+            logging.info(
+                "Plane still available: %s (%s / %s). Skipping notifications.",
+                plane.call,
+                plane.reg,
+                icao,
+            )
+        plane.last_seen = last_seen
 
     def _message_thread(self):
         @self._signal_client.chat_handler(
