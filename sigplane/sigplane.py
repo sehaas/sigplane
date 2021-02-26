@@ -75,7 +75,7 @@ class SigplaneDaemon:
             for n in subscribers:
                 self._signal_client.send_message(
                     n,
-                    "Found plane %s (%s) at %s, %s\n%s?icao=%s"
+                    "Found plane %s (%s) at %s, %s\n%s?icao=%s&showTrace=%s"
                     % (
                         plane.call,
                         plane.reg,
@@ -83,6 +83,7 @@ class SigplaneDaemon:
                         ac.get("lon"),
                         self.DOMAIN,
                         icao,
+                        datetime.date.today().strftime("%Y-%m-%d")
                     ),
                     False,
                 )
@@ -118,7 +119,7 @@ class SigplaneDaemon:
             getattr(self._subscriptions, command)(icao, number)
             msg = "%sd ICAO %s%s for %s" % (command, icao, wildcard, number)
             logging.info(msg)
-            return msg
+            return True, None, '👍'
 
         @self._signal_client.chat_handler("")
         def _message_catch_all(message, match):
