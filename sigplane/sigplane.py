@@ -59,7 +59,7 @@ class SigplaneDaemon:
                         self._handle_plane(ac, subscribers, plane)
                 self._subscriptions.save(self._config.planelist)
             except Exception as e:
-                logging.error("Error fetching airplanes: %s" % e.msg)
+                logging.error("Error fetching airplanes: %s" % e)
             time.sleep(self._config.poll_interval)
 
     def _handle_plane(self, ac, subscribers, plane):
@@ -141,6 +141,6 @@ class SigplaneDaemon:
         while True:
             try:
                 self._signal_client.run_chat()
-            except OSError as e:
+            except Exception as e:
                 logging.error("Error connecting to singald: %s" % e)
             time.sleep(self._config.poll_interval)
