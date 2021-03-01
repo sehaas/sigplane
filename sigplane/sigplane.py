@@ -73,20 +73,24 @@ class SigplaneDaemon:
             or (last_seen - plane.last_seen) > self._config.plane_idle
         ):
             for n in subscribers:
-                self._signal_client.send_message(
-                    n,
-                    "Found plane %s (%s) at %s, %s\n%s?icao=%s&showTrace=%s"
-                    % (
-                        plane.call,
-                        plane.reg,
-                        ac.get("lat"),
-                        ac.get("lon"),
-                        self.DOMAIN,
-                        icao,
-                        datetime.date.today().strftime("%Y-%m-%d")
-                    ),
-                    False,
-                )
+                try:
+                    self._signal_client.send_message(
+                        n,
+                        "Found plane %s (%s) at %s, %s\n%s?icao=%s&showTrace=%s"
+                        % (
+                            plane.call,
+                            plane.reg,
+                            ac.get("lat"),
+                            ac.get("lon"),
+                            self.DOMAIN,
+                            icao,
+                            datetime.date.today().strftime("%Y-%m-%d"),
+                        ),
+                        False,
+                    )
+                except Exception as e:
+                    logging.error("Error while sending message: %s", e)
+
             logging.info(
                 "Plane found: %s (%s / %s). Notified %d subscibers",
                 plane.call,
@@ -119,7 +123,7 @@ class SigplaneDaemon:
             getattr(self._subscriptions, command)(icao, number)
             msg = "%sd ICAO %s%s for %s" % (command, icao, wildcard, number)
             logging.info(msg)
-            return True, None, '👍'
+            return True, None, "👍"
 
         @self._signal_client.chat_handler("")
         def _message_catch_all(message, match):
