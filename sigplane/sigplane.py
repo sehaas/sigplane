@@ -59,7 +59,7 @@ class SigplaneDaemon:
                         self._handle_plane(ac, subscribers, plane)
                 self._subscriptions.save(self._config.planelist)
             except Exception as e:
-                logging.error("Exception occurrend %s" % e.msg)
+                logging.error("Error fetching airplanes: %s" % e.msg)
             time.sleep(self._config.poll_interval)
 
     def _handle_plane(self, ac, subscribers, plane):
@@ -138,4 +138,9 @@ class SigplaneDaemon:
                 "\tunblock <icao>"
             )
 
-        self._signal_client.run_chat()
+        while True:
+            try:
+                self._signal_client.run_chat()
+            except OSError as e:
+                logging.error("Error connecting to singald: %s" % e)
+            time.sleep(self._config.poll_interval)
