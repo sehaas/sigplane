@@ -86,7 +86,7 @@ class SigplaneDaemon:
                             icao,
                             datetime.date.today().strftime("%Y-%m-%d"),
                         ),
-                        False,
+                        True,
                     )
                 except Exception as e:
                     logging.error("Error while sending message: %s", e)
