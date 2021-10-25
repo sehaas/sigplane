@@ -85,3 +85,17 @@ class PlaneList:
 
             plane = self._planes.setdefault(icao, Plane(icao))
             return (numbers, plane)
+
+    def fetch_status(self, number):
+        with self._lock:
+            subscribed = set()
+            blocked = set()
+            for sub in self._subscriptions.values():
+                if sub.contains(number):
+                    subscribed.update([sub.pattern])
+
+            for blo in self._blocklist.values():
+                if blo.contains(number):
+                    blocked.update([blo.pattern])
+
+        return (sorted(subscribed), sorted(blocked))

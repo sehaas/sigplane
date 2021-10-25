@@ -25,3 +25,6 @@ class Subscription:
         except ValueError:
             pass  # do nothing!
         return len(self._subscribers)
+
+    def contains(self, number):
+        return number in self._subscribers
