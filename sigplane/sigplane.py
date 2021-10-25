@@ -125,6 +125,23 @@ class SigplaneDaemon:
             logging.info(msg)
             return True, None, "👍"
 
+        @self._signal_client.chat_handler("status")
+        def _message_status_handler(message, match):
+            number = message.source.get("number")
+            logging.info("Querying status for %s", number)
+            subscribed, blocked = self._subscriptions.fetch_status(number)
+            result = "Subscribed:\n  "
+            if len(subscribed) > 0:
+                result += "\n  ".join(subscribed)
+            else:
+                result += "  -"
+            result += "\nBlocked:\n  "
+            if len(blocked) > 0:
+                result += "\n  ".join(blocked)
+            else:
+                result += "  -"
+            return result
+
         @self._signal_client.chat_handler("")
         def _message_catch_all(message, match):
             # This will only be sent if nothing else matches, because matching
