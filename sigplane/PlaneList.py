@@ -43,59 +43,64 @@ class PlaneList:
         with self._lock:
             return self._planes.setdefault(icao, Plane(icao))
 
-    def subscribe(self, icao, number):
+    def subscribe(self, icao, number, group):
         with self._lock:
             self._subscriptions.setdefault(icao, Subscription(icao)).add_subscriber(
-                number
+                number, group
             )
-            self.unblock(icao, number)  # overrule previous block
+            self.unblock(icao, number, group)  # overrule previous block
 
-    def unsubscribe(self, icao, number):
+    def unsubscribe(self, icao, number, group):
         with self._lock:
             if icao in self._subscriptions:
-                if self._subscriptions.get(icao).del_subscriber(number) == 0:
+                if self._subscriptions.get(icao).del_subscriber(number, group) == 0:
                     self._subscriptions.pop(icao)
 
-    def block(self, icao, number):
+    def block(self, icao, number, group):
         with self._lock:
-            self._blocklist.setdefault(icao, Subscription(icao)).add_subscriber(number)
-            self.unsubscribe(icao, number)  # overrule previous subscription
+            self._blocklist.setdefault(icao, Subscription(icao)).add_subscriber(
+                number, group
+            )
+            self.unsubscribe(icao, number, group)  # overrule previous subscription
 
-    def unblock(self, icao, number):
+    def unblock(self, icao, number, group):
         with self._lock:
             if icao in self._blocklist:
-                if self._blocklist.get(icao).del_subscriber(number) == 0:
+                if self._blocklist.get(icao).del_subscriber(number, group) == 0:
                     self._blocklist.pop(icao)
 
     def check_icao(self, icao):
         with self._lock:
             numbers = set()
+            groups = set()
             for sub in self._subscriptions.values():
                 if icao.startswith(sub.pattern):
                     numbers.update(sub.subscribers)
+                    groups.update(sub.groups)
 
             for block in self._blocklist.values():
                 if icao.startswith(block.pattern):
                     numbers.difference_update(block.subscribers)
+                    groups.difference_update(block.groups)
 
-            if len(numbers) == 0:
+            if len(numbers) == 0 and len(groups) == 0:
                 if icao in self._planes:
                     self._planes.pop(icao)
-                return (None, None)
+                return (None, None, None)
 
             plane = self._planes.setdefault(icao, Plane(icao))
-            return (numbers, plane)
+            return (numbers, groups, plane)
 
-    def fetch_status(self, number):
+    def fetch_status(self, number, group):
         with self._lock:
             subscribed = set()
             blocked = set()
             for sub in self._subscriptions.values():
-                if sub.contains(number):
+                if sub.contains(number, group):
                     subscribed.update([sub.pattern])
 
             for blo in self._blocklist.values():
-                if blo.contains(number):
+                if blo.contains(number, group):
                     blocked.update([blo.pattern])
 
         return (sorted(subscribed), sorted(blocked))
