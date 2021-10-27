@@ -54,15 +54,17 @@ class SigplaneDaemon:
 
                 logging.info("%d available planes", data.get("total"))
                 for ac in data.get("ac"):
-                    subscribers, plane = self._subscriptions.check_icao(ac.get("icao"))
+                    subscribers, groups, plane = self._subscriptions.check_icao(
+                        ac.get("icao")
+                    )
                     if plane is not None:
-                        self._handle_plane(ac, subscribers, plane)
+                        self._handle_plane(ac, subscribers, groups, plane)
                 self._subscriptions.save(self._config.planelist)
             except Exception as e:
                 logging.error("Error fetching airplanes: %s" % e)
             time.sleep(self._config.poll_interval)
 
-    def _handle_plane(self, ac, subscribers, plane):
+    def _handle_plane(self, ac, subscribers, groups, plane):
         icao = plane.icao
         last_seen = datetime.datetime.fromtimestamp(float(ac.get("postime")) / 1000.0)
         plane.last_position = (float(ac.get("lat")), float(ac.get("lon")))
@@ -72,31 +74,42 @@ class SigplaneDaemon:
             plane.last_seen is None
             or (last_seen - plane.last_seen) > self._config.plane_idle
         ):
+            text = "Found plane %s (%s) at %s, %s\n%s?icao=%s&showTrace=%s" % (
+                plane.call,
+                plane.reg,
+                ac.get("lat"),
+                ac.get("lon"),
+                self.DOMAIN,
+                icao,
+                last_seen.strftime("%Y-%m-%d"),
+            )
             for n in subscribers:
                 try:
-                    self._signal_client.send_message(
-                        n,
-                        "Found plane %s (%s) at %s, %s\n%s?icao=%s&showTrace=%s"
-                        % (
-                            plane.call,
-                            plane.reg,
-                            ac.get("lat"),
-                            ac.get("lon"),
-                            self.DOMAIN,
-                            icao,
-                            datetime.date.today().strftime("%Y-%m-%d"),
-                        ),
-                        True,
+                    self._signal_client.send(
+                        recipient=n,
+                        text=text,
+                        block=True,
                     )
                 except Exception as e:
-                    logging.error("Error while sending message: %s", e)
+                    logging.error("Error while sending direct message: %s", e)
+
+            for g in groups:
+                try:
+                    self._signal_client.send(
+                        recipient_group_id=g,
+                        text=text,
+                        block=True,
+                    )
+                except Exception as e:
+                    logging.error("Error while sending group message: %s", e)
 
             logging.info(
-                "Plane found: %s (%s / %s). Notified %d subscibers",
+                "Plane found: %s (%s / %s). Notified %d subscibers and %d groups",
                 plane.call,
                 plane.reg,
                 icao,
                 len(subscribers),
+                len(groups),
             )
         else:
             logging.info(
@@ -120,16 +133,24 @@ class SigplaneDaemon:
             icao = match.group(2).upper()
             wildcard = "*" if len(icao) < 6 else ""
             number = message.source.get("number")
-            getattr(self._subscriptions, command)(icao, number)
-            msg = "%sd ICAO %s%s for %s" % (command, icao, wildcard, number)
+            group_id = message.group_v2.get("id")
+            getattr(self._subscriptions, command)(icao, number, group_id)
+            msg = "%sd ICAO %s%s for %s (%s)" % (
+                command,
+                icao,
+                wildcard,
+                number,
+                group_id,
+            )
             logging.info(msg)
             return True, None, "👍"
 
         @self._signal_client.chat_handler("status")
         def _message_status_handler(message, match):
             number = message.source.get("number")
-            logging.info("Querying status for %s", number)
-            subscribed, blocked = self._subscriptions.fetch_status(number)
+            group_id = message.group_v2.get("id")
+            logging.info("Querying status for %s (%s)", number, group_id)
+            subscribed, blocked = self._subscriptions.fetch_status(number, group_id)
             result = "Subscribed:\n  "
             if len(subscribed) > 0:
                 result += "\n  ".join(subscribed)
@@ -156,7 +177,8 @@ class SigplaneDaemon:
                 "\tsubscribe <icao>\n"
                 "\tunsubscribe <icao>\n"
                 "\tblock <icao>\n"
-                "\tunblock <icao>"
+                "\tunblock <icao>\n"
+                "\tstatus"
             )
 
         while True:
