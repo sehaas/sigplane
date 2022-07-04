@@ -52,7 +52,7 @@ class SigplaneDaemon:
                     data = gzip.decompress(data)
                 data = json.loads(data)
 
-                logging.info("%d available planes", data.get("total"))
+                logging.info("%s available planes", data.get("total"))
                 for ac in data.get("ac"):
                     subscribers, groups, plane = self._subscriptions.check_icao(
                         ac.get("icao")
